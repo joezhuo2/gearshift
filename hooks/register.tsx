@@ -38,21 +38,38 @@ type State = {
   blockedUntil: Record<string, number>
 }
 
-async function pick($: EngineInterface, s: State, text: string, labels: readonly string[], model?: string): Promise<string | undefined> {
-  const timeout = $.clock.sleep(CLASSIFY_TIMEOUT_MS).then(
-    () => 'timeout' as const,
-    () => new Promise<never>(() => {}),
-  )
-  const started = Date.now()
-  const result = await Promise.race([
-    $.model.classify(text, labels, model ? { model } : undefined).catch((err: unknown) => ({ error: String(err).slice(0, 200) })),
-    timeout,
-  ])
-  const ms = Date.now() - started
-  if (result === 'timeout') s.classifier = `timed out after ${ms} ms`
-  else if (typeof result === 'object') s.classifier = `failed after ${ms} ms: ${result.error}`
-  else s.classifier = `answered ${result ?? 'no matching label'} in ${ms} ms`
-  return typeof result === 'string' && result !== 'timeout' ? result : undefined
+async function pick($: EngineInterface, s: State, text: string, labels: readonly string[]): Promise<string | undefined> {
+  const candidates = [s.classifierModel ?? '', 'sonnet'].filter((m, i, all) => all.indexOf(m) === i)
+  const notes: string[] = []
+  for (const model of candidates) {
+    const key = `classifier:${model}`
+    if ((s.blockedUntil[key] ?? 0) > Date.now()) {
+      notes.push(`${model || 'default'} paused after an error`)
+      continue
+    }
+    const timeout = $.clock.sleep(CLASSIFY_TIMEOUT_MS).then(
+      () => 'timeout' as const,
+      () => new Promise<never>(() => {}),
+    )
+    const started = Date.now()
+    const result = await Promise.race([
+      $.model.classify(text, labels, model ? { model } : undefined).catch((err: unknown) => ({ error: String(err).slice(0, 120) })),
+      timeout,
+    ])
+    const ms = Date.now() - started
+    if (typeof result === 'string' && result !== 'timeout') {
+      s.classifier = `${model || 'default'} answered in ${ms} ms`
+      return result
+    }
+    if (result === undefined) {
+      s.classifier = `${model || 'default'} answered no label in ${ms} ms`
+      return undefined
+    }
+    s.blockedUntil[key] = Date.now() + BLOCK_MS
+    notes.push(`${model || 'default'} ${result === 'timeout' ? 'timed out' : result.error}`)
+  }
+  s.classifier = notes.join('; ')
+  return undefined
 }
 
 async function classify($: EngineInterface, s: State, text: string): Promise<Tier | undefined> {
@@ -65,7 +82,7 @@ async function classify($: EngineInterface, s: State, text: string): Promise<Tie
     s.lastReason = 'keyword match'
     return fast
   }
-  const tier = tierFromLabel(await pick($, s, text, LABELS, s.classifierModel))
+  const tier = tierFromLabel(await pick($, s, text, LABELS))
   if (tier) {
     s.lastReason = 'classifier'
     return tier
@@ -179,7 +196,7 @@ export const register: Register = (on, options) => {
     if (e.turnId !== undefined) {
       if (options.triage_enabled === false || e.wait || e.origin.kind !== 'composer' || !s.running) return next(e)
       const decision =
-        fastTriage(e.text) ?? decisionFromLabel(await pick($, s, triageInput(s.running.text, e.text), TRIAGE_LABELS, s.classifierModel)) ?? unsure
+        fastTriage(e.text) ?? decisionFromLabel(await pick($, s, triageInput(s.running.text, e.text), TRIAGE_LABELS)) ?? unsure
       if (decision === 'steer') {
         $.ui.toast('gearshift: steering the current task')
         return next(e)
