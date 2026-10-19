@@ -3,6 +3,14 @@
 <p align="center">
   <em>Cheaper where it can be, smarter where it counts.</em>
 </p>
+
+<p align="center">
+  <a href="https://github.com/joezhuo2/gearshift/stargazers"><img src="https://img.shields.io/github/stars/joezhuo2/gearshift?style=flat-square&logo=github" alt="GitHub stars"></a>
+  <a href="https://github.com/joezhuo2/gearshift/releases"><img src="https://img.shields.io/github/downloads/joezhuo2/gearshift/total?style=flat-square&logo=github" alt="Release downloads"></a>
+  <a href="https://github.com/joezhuo2/gearshift/blob/main/LICENSE"><img src="https://img.shields.io/github/license/joezhuo2/gearshift?style=flat-square" alt="License"></a>
+  <a href="https://github.com/joezhuo2/gearshift/releases/latest"><img src="https://img.shields.io/github/v/release/joezhuo2/gearshift?style=flat-square" alt="Latest version"></a>
+  <a href="https://github.com/joezhuo2/gearshift#-requirements"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 18+"></a>
+</p>
   
 <p align="center">
   <a href="#-requirements">Requirements</a> •
