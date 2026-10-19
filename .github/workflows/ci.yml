@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate manifests and installer
+        run: |
+          node --check bin/gearshift.js
+          node -e "for (const f of ['package.json','.claude-plugin/plugin.json','.claude-plugin/marketplace.json']) JSON.parse(require('fs').readFileSync(f,'utf8'))"
+      - name: Versions match
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          plug=$(node -p "require('./.claude-plugin/plugin.json').version")
+          test "$pkg" = "$plug" || { echo "package.json $pkg != plugin.json $plug"; exit 1; }
+      - name: Tag matches version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")" || { echo "tag $GITHUB_REF_NAME != package.json version"; exit 1; }
+      - name: Changelog has entry
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: grep -q "^## ${GITHUB_REF_NAME#v}\$" CHANGELOG.md
