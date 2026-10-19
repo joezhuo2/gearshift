@@ -117,7 +117,6 @@ export const register: Register = (on, options) => {
       description: 'Model routing and triage: /gearshift [auto|off|simple|everyday|hard|now|drop|panel]',
       immediate: true,
     })
-    void $.ui.open({ id: PANE, title: 'gearshift' })
     await publish($, snap())
     return next(e)
   })
