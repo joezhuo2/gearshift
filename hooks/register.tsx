@@ -10,6 +10,8 @@ import type { Decision } from './triage'
 
 const CLASSIFY_TIMEOUT_MS = 3000
 const BLOCK_MS = 5 * 60 * 1000
+const AGENT_TIMEOUT_MS = 12000
+const AGENT_POLL_MS = 250
 
 const PANE = 'gearshift'
 
@@ -36,10 +38,29 @@ type State = {
   classifier: string
   classifierModel?: string
   blockedUntil: Record<string, number>
+  probeId?: string
+  probe: string
+  answers: Record<string, string>
+}
+
+async function viaAgent($: EngineInterface, s: State, text: string, labels: readonly string[]): Promise<string | { error: string }> {
+  const prompt = ['Classify the text below. Reply with exactly one of these labels and nothing else:', ...labels, '', 'Text:', text].join('\n')
+  const started = await $.agent.spawn({ prompt, description: 'gearshift classify', model: 'haiku' }).catch((err: unknown) => ({ error: String(err).slice(0, 120) }))
+  if (!('agentId' in started) || !started.agentId) return { error: `spawn returned ${JSON.stringify(started).slice(0, 100)}` }
+  const id = started.agentId
+  for (let waited = 0; waited < AGENT_TIMEOUT_MS; waited += AGENT_POLL_MS) {
+    const answer = s.answers[id]
+    if (answer !== undefined) {
+      delete s.answers[id]
+      return labels.find(l => answer.includes(l)) ?? { error: `agent answered "${answer.slice(0, 60)}"` }
+    }
+    await $.clock.sleep(AGENT_POLL_MS).catch(() => undefined)
+  }
+  return { error: 'agent timed out' }
 }
 
 async function pick($: EngineInterface, s: State, text: string, labels: readonly string[]): Promise<string | undefined> {
-  const candidates = [s.classifierModel ?? '', 'sonnet'].filter((m, i, all) => all.indexOf(m) === i)
+  const candidates = [s.classifierModel ?? '', 'sonnet', 'agent'].filter((m, i, all) => all.indexOf(m) === i)
   const notes: string[] = []
   for (const model of candidates) {
     const key = `classifier:${model}`
@@ -47,18 +68,23 @@ async function pick($: EngineInterface, s: State, text: string, labels: readonly
       notes.push(`${model || 'default'} paused after an error`)
       continue
     }
-    const timeout = $.clock.sleep(CLASSIFY_TIMEOUT_MS).then(
-      () => 'timeout' as const,
-      () => new Promise<never>(() => {}),
-    )
     const started = Date.now()
-    const result = await Promise.race([
-      $.model.classify(text, labels, model ? { model } : undefined).catch((err: unknown) => ({ error: String(err).slice(0, 120) })),
-      timeout,
-    ])
+    let result: string | undefined | { error: string }
+    if (model === 'agent') {
+      result = await viaAgent($, s, text, labels)
+    } else {
+      const timeout = $.clock.sleep(CLASSIFY_TIMEOUT_MS).then(
+        () => ({ error: 'timed out' }),
+        () => new Promise<never>(() => {}),
+      )
+      result = await Promise.race([
+        $.model.classify(text, labels, model ? { model } : undefined).catch((err: unknown) => ({ error: String(err).slice(0, 120) })),
+        timeout,
+      ])
+    }
     const ms = Date.now() - started
-    if (typeof result === 'string' && result !== 'timeout') {
-      s.classifier = `${model || 'default'} answered in ${ms} ms`
+    if (typeof result === 'string') {
+      s.classifier = `${model === 'agent' ? 'haiku subagent' : model || 'default'} answered in ${ms} ms`
       return result
     }
     if (result === undefined) {
@@ -66,7 +92,7 @@ async function pick($: EngineInterface, s: State, text: string, labels: readonly
       return undefined
     }
     s.blockedUntil[key] = Date.now() + BLOCK_MS
-    notes.push(`${model || 'default'} ${result === 'timeout' ? 'timed out' : result.error}`)
+    notes.push(`${model === 'agent' ? 'subagent' : model || 'default'}: ${result.error}`)
   }
   s.classifier = notes.join('; ')
   return undefined
@@ -123,6 +149,8 @@ export const register: Register = (on, options) => {
     classifier: 'not called yet',
     classifierModel: String(options.classifier_model ?? '') || undefined,
     blockedUntil: {},
+    probe: 'not run',
+    answers: {},
   }
   const usable = (model: string) => model !== '' && (s.blockedUntil[model] ?? 0) < Date.now()
   const snap = (): Snapshot => {
@@ -153,6 +181,15 @@ export const register: Register = (on, options) => {
       await $.ui.open({ id: PANE, title: 'gearshift' })
       return { text: 'gearshift: panel opened.' }
     }
+    if (arg === 'probe') {
+      s.probe = 'running'
+      const started = await $.agent
+        .spawn({ prompt: 'Reply with exactly one word: ok', description: 'gearshift probe', model: 'haiku' })
+        .catch((err: unknown) => ({ error: String(err).slice(0, 200) }))
+      s.probeId = 'agentId' in started ? started.agentId : undefined
+      if (!s.probeId) s.probe = `spawn returned ${JSON.stringify(started).slice(0, 200)}`
+      return { text: `gearshift: spawn returned ${JSON.stringify(started).slice(0, 200)}. Run /gearshift in a few seconds.` }
+    }
     if (arg === 'now') {
       const last = s.queue.pop()
       if (!last) return { text: 'gearshift: nothing queued.' }
@@ -171,7 +208,7 @@ export const register: Register = (on, options) => {
     await publish($, snap())
     const tier = s.sticky.current
     return {
-      text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}. Classifier: ${s.classifier}. Queued: ${s.queue.length}.`,
+      text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}. Classifier: ${s.classifier}. Subagent probe: ${s.probe}. Queued: ${s.queue.length}.`,
     }
   })
 
@@ -182,6 +219,10 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    if (e.agentId !== undefined) {
+      s.answers[e.agentId] = e.reason === 'answer' ? e.answer : ''
+      if (e.agentId === s.probeId) s.probe = e.reason === 'answer' ? `ok, answered "${e.answer.slice(0, 40)}"` : `ended: ${e.reason}`
+    }
     if (e.agentId === undefined && s.running?.turnId === e.turnId) {
       s.running = undefined
       await flush($, s)
