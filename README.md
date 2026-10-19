@@ -5,15 +5,15 @@
 </p>
   
 <p align="center">
-  <a href="#-requirements">📋 Requirements</a> •
-  <a href="#-install">🚀 Install</a> •
-  <a href="#-how-routing-works">🧭 Routing</a> •
-  <a href="#-how-triage-works">🚦 Triage</a> •
-  <a href="#-configuration">🔧 Configuration</a> •
-  <a href="#-token-usage">📊 Token Usage</a> •
-  <a href="#-privacy">🔒 Privacy</a> •
-  <a href="#-troubleshooting">🩺 Troubleshooting</a> •
-  <a href="#-development">🧪 Development</a> •
+  <a href="#-requirements">Requirements</a> •
+  <a href="#-install">Install</a> •
+  <a href="#-how-routing-works">Routing</a> •
+  <a href="#-how-triage-works">Triage</a> •
+  <a href="#-configuration">Configuration</a> •
+  <a href="#-token-usage">Token Usage</a> •
+  <a href="#-privacy">Privacy</a> •
+  <a href="#-troubleshooting">Troubleshooting</a> •
+  <a href="#-development">Development</a>
 </p>
 
 <p align="center">
