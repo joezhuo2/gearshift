@@ -76,6 +76,8 @@ Prove the risky calls work before building anything.
 - **Mid-turn prompts:** by default the engine delivers a prompt typed mid-turn *into* the running turn. That steers the agent but doesn't stop it. `prompt.submit` sees the prompt with `turnId` set.
 - **Explicit queue flag:** `prompt.submit` has `wait: true` when the user pressed `ctrl+x enter` to say "queue this". Gearshift must never interrupt when that flag is set.
 - **Queueing is cheap:** `$.prompt.submit` from a plugin "runs once it is idle". To queue a prompt, return `{ drop }` and call `$.prompt.submit({ text, asUser: true })` right away. No manual queue or flush on `turn.complete` is needed.
+- **No submit inside submit:** a `prompt.submit` hook can't call `$.prompt.submit`; the engine refuses it to avoid a deadlock. So both interrupt and queue store the text, return `{ drop }`, and send it from `turn.complete`. An aborted turn completes too, which is what sends the steer prompt.
+- **No timers:** the mod runtime has no `setTimeout`, so timeouts use `$.clock.sleep`. Under the test clock, `sleep` can reject, so a race against it must treat a rejection as "never".
 - **Hook shape:** a `turn.step` hook must be an `async function*` generator (`return yield* next({ ...e, model })`).
 - **Validator rule:** helpers that take `$` must be top-level function declarations.
 - **The real choice is three-way:**
