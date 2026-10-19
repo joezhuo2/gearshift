@@ -41,6 +41,8 @@ type State = {
   probeId?: string
   probe: string
   answers: Record<string, string>
+  hintRuns: number
+  hintSurface: string
 }
 
 async function viaAgent($: EngineInterface, s: State, text: string, labels: readonly string[]): Promise<string | { error: string }> {
@@ -151,6 +153,8 @@ export const register: Register = (on, options) => {
     blockedUntil: {},
     probe: 'not run',
     answers: {},
+    hintRuns: 0,
+    hintSurface: 'none',
   }
   const usable = (model: string) => model !== '' && (s.blockedUntil[model] ?? 0) < Date.now()
   const snap = (): Snapshot => {
@@ -208,7 +212,7 @@ export const register: Register = (on, options) => {
     await publish($, snap())
     const tier = s.sticky.current
     return {
-      text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}. Classifier: ${s.classifier}. Subagent probe: ${s.probe}. Queued: ${s.queue.length}.`,
+      text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}. Classifier: ${s.classifier}. Subagent probe: ${s.probe}. Hint line: drawn ${s.hintRuns} times (${s.hintSurface}). Queued: ${s.queue.length}.`,
     }
   })
 
@@ -301,6 +305,8 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    s.hintRuns += 1
+    s.hintSurface = e.surface
     const v = await read($, view)
     if (v.mode === 'off') return next(e)
     const routed = v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'session model'
