@@ -31,6 +31,19 @@
       "title": "Model for hard work",
       "description": "Architecture, subtle bugs, security",
       "default": "claude-opus-5-5"
+    },
+    "triage_enabled": {
+      "type": "boolean",
+      "title": "Triage prompts sent mid-run",
+      "description": "Decide whether a prompt typed while the agent works should interrupt, steer or wait",
+      "default": true
+    },
+    "triage_unsure": {
+      "type": "string",
+      "title": "When triage is unsure",
+      "description": "queue waits for the current task; steer hands it to the running task",
+      "options": ["queue", "steer"],
+      "default": "queue"
     }
   }
 }
