@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- `/gearshift` reports the hint line draws.
+- Add CI and tagged GitHub releases.
+
 ## 0.1.0
 
 First release.
