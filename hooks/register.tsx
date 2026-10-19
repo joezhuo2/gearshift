@@ -11,7 +11,7 @@ import type { Decision } from './triage'
 const CLASSIFY_TIMEOUT_MS = 3000
 const BLOCK_MS = 5 * 60 * 1000
 
-const band = atom({ plugin: 'gearshift', key: 'band' } as const, false)
+const PANE = 'gearshift'
 
 const view = atom({ plugin: 'gearshift', key: 'snapshot' } as const, {
   mode: 'auto',
@@ -133,8 +133,8 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'gearshift' }, async ($, e) => {
     const arg = (e.args ?? '').trim().toLowerCase()
     if (arg === 'panel') {
-      const shown = await update($, band, open => !open)
-      return { text: `gearshift: details ${shown ? 'shown in' : 'hidden from'} the hint line under the prompt.` }
+      await $.ui.open({ id: PANE, title: 'gearshift' })
+      return { text: 'gearshift: panel opened.' }
     }
     if (arg === 'now') {
       const last = s.queue.pop()
@@ -246,8 +246,21 @@ export const register: Register = (on, options) => {
     const v = await read($, view)
     if (v.mode === 'off') return next(e)
     const routed = v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'session model'
-    const detail = (await read($, band)) ? ` · why: ${v.reason} · classifier: ${v.classifier}` : ''
-    const tag = `⚙ ${routed}${v.queued ? ` · ${v.queued} queued` : ''}${detail}`
+    const tag = `⚙ ${routed}${v.queued ? ` · ${v.queued} queued` : ''}`
     return next({ ...e, props: { ...e.props, hint: e.props.hint ? `${tag} · ${e.props.hint}` : tag } })
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    const v = await read($, view)
+    return (
+      <Box flexDirection="column">
+        <Text bold>{v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'no tier yet (session model)'}</Text>
+        <Text dimColor>mode: {v.mode}</Text>
+        <Text dimColor>why: {v.reason}</Text>
+        <Text dimColor>classifier: {v.classifier}</Text>
+        <Text dimColor>queued: {String(v.queued)}</Text>
+      </Box>
+    )
   })
 }
