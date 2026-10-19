@@ -9,15 +9,11 @@
   <a href="#-install">🚀 Install</a> •
   <a href="#-how-routing-works">🧭 Routing</a> •
   <a href="#-how-triage-works">🚦 Triage</a> •
-  <a href="#-commands">💬 Commands</a> •
   <a href="#-configuration">🔧 Configuration</a> •
-  <a href="#-classifier">🧠 Classifier</a> •
-  <a href="#-fallbacks">🛟 Fallbacks</a> •
   <a href="#-token-usage">📊 Token Usage</a> •
   <a href="#-privacy">🔒 Privacy</a> •
   <a href="#-troubleshooting">🩺 Troubleshooting</a> •
   <a href="#-development">🧪 Development</a> •
-  <a href="#-license">📄 License</a>
 </p>
 
 <p align="center">
