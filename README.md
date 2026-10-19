@@ -83,6 +83,23 @@ gearshift mode: auto. Current tier: none. Last decision: no prompt yet. ...
 
 After your next prompt, the prompt hint shows the routed model, for example `⚙ everyday · sonnet-5-5`.
 
+### 🔄 Update
+
+```bash
+npx gearshift update
+```
+
+This refreshes the marketplace and updates the plugin to the latest release. Restart Claude Code (or start a new session) so the new version loads.
+
+Inside Claude Code CLI, run:
+
+```
+/plugin marketplace update gearshift
+/plugin update gearshift@gearshift
+```
+
+To see the newest version, check the [latest release](https://github.com/joezhuo2/gearshift/releases/latest).
+
 ### 🗑️ Uninstall
 
 ```bash
