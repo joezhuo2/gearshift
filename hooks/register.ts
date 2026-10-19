@@ -18,14 +18,25 @@ type State = {
   running?: { turnId: string; text: string }
   queue: string[]
   steer?: string
+  classifier: string
+  classifierModel?: string
 }
 
-async function pick($: EngineInterface, text: string, labels: readonly string[]): Promise<string | undefined> {
+async function pick($: EngineInterface, s: State, text: string, labels: readonly string[], model?: string): Promise<string | undefined> {
   const timeout = $.clock.sleep(CLASSIFY_TIMEOUT_MS).then(
-    () => undefined,
-    () => new Promise<undefined>(() => {}),
+    () => 'timeout' as const,
+    () => new Promise<never>(() => {}),
   )
-  return Promise.race([$.model.classify(text, labels, { model: 'haiku' }).catch(() => undefined), timeout])
+  const started = Date.now()
+  const result = await Promise.race([
+    $.model.classify(text, labels, model ? { model } : undefined).catch((err: unknown) => ({ error: String(err).slice(0, 200) })),
+    timeout,
+  ])
+  const ms = Date.now() - started
+  if (result === 'timeout') s.classifier = `timed out after ${ms} ms`
+  else if (typeof result === 'object') s.classifier = `failed after ${ms} ms: ${result.error}`
+  else s.classifier = `answered ${result ?? 'no matching label'} in ${ms} ms`
+  return typeof result === 'string' && result !== 'timeout' ? result : undefined
 }
 
 async function classify($: EngineInterface, s: State, text: string): Promise<Tier | undefined> {
@@ -38,7 +49,7 @@ async function classify($: EngineInterface, s: State, text: string): Promise<Tie
     s.lastReason = 'keyword match'
     return fast
   }
-  const tier = tierFromLabel(await pick($, text, LABELS))
+  const tier = tierFromLabel(await pick($, s, text, LABELS, s.classifierModel))
   s.lastReason = tier ? 'haiku classifier' : 'classifier gave no answer, kept tier'
   return tier ?? s.sticky.current
 }
@@ -68,6 +79,8 @@ export const register: Register = (on, options) => {
     sticky: { lowerVotes: 0 },
     lastReason: 'no prompt yet',
     queue: [],
+    classifier: 'not called yet',
+    classifierModel: String(options.classifier_model ?? '') || undefined,
   }
 
   on('session.start', async ($, e, next) => {
@@ -98,7 +111,7 @@ export const register: Register = (on, options) => {
     if (s.mode === 'off') $.ui.status(undefined)
     const tier = s.sticky.current
     return {
-      text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}. Queued: ${s.queue.length}.`,
+      text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}. Classifier: ${s.classifier}. Queued: ${s.queue.length}.`,
     }
   })
 
@@ -122,7 +135,7 @@ export const register: Register = (on, options) => {
     if (e.turnId !== undefined) {
       if (options.triage_enabled === false || e.wait || e.origin.kind !== 'composer' || !s.running) return next(e)
       const decision =
-        fastTriage(e.text) ?? decisionFromLabel(await pick($, triageInput(s.running.text, e.text), TRIAGE_LABELS)) ?? unsure
+        fastTriage(e.text) ?? decisionFromLabel(await pick($, s, triageInput(s.running.text, e.text), TRIAGE_LABELS, s.classifierModel)) ?? unsure
       if (decision === 'steer') {
         $.ui.toast('gearshift: steering the current task')
         return next(e)
