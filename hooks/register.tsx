@@ -226,6 +226,13 @@ export const register: Register = (on, options) => {
     return next({ ...e, props: { ...e.props, modes: [...e.props.modes, `gearshift: ${v.tier}`] } })
   })
 
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    const v = await read($, view)
+    if (v.mode === 'off' || !v.tier) return next(e)
+    const tag = `⚙ ${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}${v.queued ? ` · ${v.queued} queued` : ''}`
+    return next({ ...e, props: { ...e.props, hint: e.props.hint ? `${tag} · ${e.props.hint}` : tag } })
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     const v = await read($, view)
