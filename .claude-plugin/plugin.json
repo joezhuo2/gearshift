@@ -1,0 +1,36 @@
+{
+  "name": "gearshift",
+  "version": "0.1.0",
+  "description": "Routes each prompt to Haiku, Sonnet or Opus by difficulty, and triages prompts sent while the agent is busy",
+  "author": { "name": "joezhuo2" },
+  "homepage": "https://github.com/joezhuo2/gearshift",
+  "repository": "https://github.com/joezhuo2/gearshift",
+  "license": "MIT",
+  "keywords": ["routing", "model", "haiku", "sonnet", "opus", "cost"],
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Route prompts to models automatically",
+      "default": true
+    },
+    "model_simple": {
+      "type": "string",
+      "title": "Model for simple work",
+      "description": "Typos, renames, docs, quick lookups",
+      "default": "claude-haiku-5-5"
+    },
+    "model_everyday": {
+      "type": "string",
+      "title": "Model for everyday work",
+      "description": "Features, clear bug fixes, tests",
+      "default": "claude-sonnet-5-5"
+    },
+    "model_hard": {
+      "type": "string",
+      "title": "Model for hard work",
+      "description": "Architecture, subtle bugs, security",
+      "default": "claude-opus-5-5"
+    }
+  }
+}
