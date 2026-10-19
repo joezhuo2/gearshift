@@ -14,7 +14,9 @@ const labels = Object.values(LABELS)
 
 function classify(text) {
   const prompt = ['Classify the text below. Reply with exactly one of these labels and nothing else:', ...labels, '', 'Text:', text].join('\n')
-  const r = spawnSync('claude', ['-p', prompt, '--model', model], { encoding: 'utf8', shell: process.platform === 'win32' })
+  const env = { ...process.env }
+  delete env.ANTHROPIC_API_KEY
+  const r = spawnSync('claude', ['-p', prompt, '--model', model], { encoding: 'utf8', env, shell: process.platform === 'win32' })
   if (r.error || r.status !== 0) throw new Error(`claude -p failed: ${(r.error?.message ?? r.stderr ?? '').slice(0, 200)}`)
   const answer = r.stdout.trim()
   const tier = Object.keys(LABELS).find(t => answer.includes(LABELS[t]))
