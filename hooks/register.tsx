@@ -134,7 +134,7 @@ export const register: Register = (on, options) => {
     const arg = (e.args ?? '').trim().toLowerCase()
     if (arg === 'panel') {
       const shown = await update($, band, open => !open)
-      return { text: `gearshift: panel ${shown ? 'shown above the prompt' : 'hidden'}.` }
+      return { text: `gearshift: details ${shown ? 'shown in' : 'hidden from'} the hint line under the prompt.` }
     }
     if (arg === 'now') {
       const last = s.queue.pop()
@@ -246,25 +246,8 @@ export const register: Register = (on, options) => {
     const v = await read($, view)
     if (v.mode === 'off') return next(e)
     const routed = v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'session model'
-    const tag = `⚙ ${routed}${v.queued ? ` · ${v.queued} queued` : ''}`
+    const detail = (await read($, band)) ? ` · why: ${v.reason} · classifier: ${v.classifier}` : ''
+    const tag = `⚙ ${routed}${v.queued ? ` · ${v.queued} queued` : ''}${detail}`
     return next({ ...e, props: { ...e.props, hint: e.props.hint ? `${tag} · ${e.props.hint}` : tag } })
-  })
-
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || !(await read($, band))) return next(e)
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const v = await read($, view)
-    const routed = v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'session model'
-    return (
-      <Box flexDirection="column">
-        <Box>
-          <Text bold>gearshift: {routed} </Text>
-          <Text dimColor>(mode {v.mode}, {String(v.queued)} queued) </Text>
-          <Button key="hide" label="Hide" onPress={() => update($, band, () => false)} />
-        </Box>
-        <Text dimColor>why: {v.reason}</Text>
-        <Text dimColor>classifier: {v.classifier}</Text>
-      </Box>
-    )
   })
 }
