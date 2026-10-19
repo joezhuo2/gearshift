@@ -47,10 +47,14 @@ test('sticky: a higher vote resets the downgrade count', () => {
   expect(s.current).toBe('hard')
 })
 
-function engine(on: On, label: string, seen: string[]) {
-  on('model.classify', () => ({ value: label }))
+function engine(on: On, label: string, seen: string[], fail: { classify?: boolean; model?: string } = {}) {
+  on('model.classify', () => {
+    if (fail.classify) throw new Error('HTTP 429 rate_limit')
+    return { value: label }
+  })
   on('prompt.submit', ($, e) => ({ text: e.text }))
   on('turn.step', async function* ($, e) {
+    if (e.model === fail.model) throw new Error('HTTP 429 rate_limit')
     seen.push(e.model)
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: null }
   })
@@ -96,4 +100,22 @@ test('/gearshift off passes the engine model through', async ($, on) => {
   await submit($, 'fix the typo in README')
   await step($, 't1')
   expect(seen).toEqual(['engine-default'])
+})
+
+test('a classifier failure defaults to the everyday model', async ($, on) => {
+  const seen: string[] = []
+  engine(on, LABELS[0], seen, { classify: true })
+  await submit($, 'add a dark mode toggle to the settings page')
+  await step($, 't1')
+  expect(seen).toEqual(['claude-sonnet-5-5'])
+})
+
+test('a failing routed model falls back to the session model', async ($, on) => {
+  const seen: string[] = []
+  engine(on, LABELS[0], seen, { model: 'claude-haiku-5-5' })
+  await submit($, 'in one word, what is the capital of France?')
+  await step($, 't1')
+  await submit($, 'in one word, what is the capital of Spain?')
+  await step($, 't2')
+  expect(seen).toEqual(['engine-default', 'engine-default'])
 })
