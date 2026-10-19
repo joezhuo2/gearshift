@@ -5,6 +5,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/icon.webp" alt="gearshift icon" width="160">
+</p>
+
+<p align="center">
   <a href="https://github.com/joezhuo2/gearshift/stargazers"><img src="https://img.shields.io/github/stars/joezhuo2/gearshift?style=flat-square&logo=github" alt="GitHub stars"></a>
   <a href="https://github.com/joezhuo2/gearshift/releases"><img src="https://img.shields.io/github/downloads/joezhuo2/gearshift/total?style=flat-square&logo=github" alt="Release downloads"></a>
   <a href="https://github.com/joezhuo2/gearshift/blob/main/LICENSE"><img src="https://img.shields.io/github/license/joezhuo2/gearshift?style=flat-square" alt="License"></a>
