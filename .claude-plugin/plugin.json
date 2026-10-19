@@ -1,6 +1,6 @@
 {
   "name": "gearshift",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Routes each prompt to Haiku, Sonnet or Opus by difficulty, and triages prompts sent while the agent is busy",
   "author": { "name": "joezhuo2" },
   "homepage": "https://github.com/joezhuo2/gearshift",
