@@ -1,22 +1,56 @@
-# gearshift
+<h1 align="center">⚙️ gearshift</h1>
 
-Automatic model routing and mid-run prompt triage for Claude Code.
+<p align="center">
+  <a href="#-requirements">📋 Requirements</a> •
+  <a href="#-install">🚀 Install</a> •
+  <a href="#-how-routing-works">🧭 Routing</a> •
+  <a href="#-how-triage-works">🚦 Triage</a> •
+  <a href="#-commands">💬 Commands</a> •
+  <a href="#-configuration">🔧 Configuration</a> •
+  <a href="#-classifier">🧠 Classifier</a> •
+  <a href="#-fallbacks">🛟 Fallbacks</a> •
+  <a href="#-token-usage">📊 Token Usage</a> •
+  <a href="#-privacy">🔒 Privacy</a> •
+  <a href="#-troubleshooting">🩺 Troubleshooting</a> •
+  <a href="#-development">🧪 Development</a> •
+  <a href="#-license">📄 License</a>
+</p>
 
-gearshift does two jobs without you asking:
+<p align="center">
+  gearshift runs two jobs in the background, so you never pick a model or babysit a queue.<br>
+  <b>🧭 Routing</b> sends each prompt to the model that fits it: Haiku for simple work, Sonnet for everyday work, Opus for hard work, subagents included.<br>
+  <b>🚦 Triage</b> decides whether a prompt typed mid-run should interrupt, steer, or queue behind the current task.<br>
+  Cheaper where it can be, smarter where it counts.
+</p>
 
-1. **Routing.** Each prompt goes to the model that fits its difficulty: Haiku for simple work, Sonnet for everyday work, Opus for hard work. Subagents the agent spawns get routed the same way.
-2. **Triage.** When you type while the agent is busy, gearshift decides whether your new prompt should **interrupt** the current task, **steer** it, or **queue** until it finishes.
-
-## Requirements
+## 📋 Requirements
 
 - Claude Code with plugin mod support (built and tested against Claude Code 2.1.299). gearshift runs as a mod, so it only works inside Claude Code: the CLI, the desktop app's Code tab, and the IDE extensions.
-- Access to the models you route to. By default that is `claude-haiku-5-5`, `claude-sonnet-5-5` and `claude-opus-5-5`. If one is unavailable on your plan, gearshift falls back to your session model (see [Fallbacks](#fallbacks)).
+- Access to the models you route to. By default that is `claude-haiku-5-5`, `claude-sonnet-5-5` and `claude-opus-5-5`. If one is unavailable on your plan, gearshift falls back to your session model (see [Fallbacks](#-fallbacks)).
+- Node.js 18+ only if you install through `npx`/`npm`.
 
-No API key, npm install or build step is needed. gearshift uses your existing Claude Code session.
+No API key or build step is needed. gearshift uses your existing Claude Code session.
 
-## Install
+## 🚀 Install
 
-### Claude Code CLI
+### ⚡ npx (one command)
+
+```bash
+npx gearshift
+```
+
+This runs `claude plugin marketplace add joezhuo2/gearshift` and `claude plugin install gearshift@gearshift` for you. Restart Claude Code (or start a new session) so the mod loads.
+
+Prefer a global install?
+
+```bash
+npm install -g gearshift
+gearshift install
+```
+
+`gearshift update` and `gearshift uninstall` work the same way (`npx gearshift update`, `npx gearshift uninstall`).
+
+### 🖥️ Claude Code CLI (manual)
 
 ```
 /plugin marketplace add joezhuo2/gearshift
@@ -25,7 +59,7 @@ No API key, npm install or build step is needed. gearshift uses your existing Cl
 
 Restart Claude Code (or start a new session) so the mod loads.
 
-### Claude desktop app (Code tab)
+### 🪟 Claude desktop app (Code tab)
 
 The `/plugin` command does not run in the Code tab, so use the UI:
 
@@ -34,7 +68,7 @@ The `/plugin` command does not run in the Code tab, so use the UI:
 3. Install **gearshift** from that marketplace.
 4. Start a new session.
 
-### Check it works
+### ✅ Check it works
 
 Run `/gearshift`. You should see a line like:
 
@@ -44,54 +78,60 @@ gearshift mode: auto. Current tier: none. Last decision: no prompt yet. ...
 
 After your next prompt, the prompt hint shows the routed model, for example `⚙ everyday · sonnet-5-5`.
 
-### Uninstall
+### 🗑️ Uninstall
+
+```bash
+npx gearshift uninstall
+```
+
+Or, inside Claude Code:
 
 ```
 /plugin uninstall gearshift@gearshift
 ```
 
-## How routing works
+## 🧭 How routing works
 
 Every prompt you send gets a tier:
 
 | Tier | Default model | Typical work |
 | --- | --- | --- |
-| `simple` | `claude-haiku-5-5` | Typos, renames, formatting, docs, version bumps, quick lookups |
-| `everyday` | `claude-sonnet-5-5` | Features, clear bug fixes, tests, refactors with a clear spec |
-| `hard` | `claude-opus-5-5` | Architecture, race conditions, memory leaks, root-cause debugging, security reviews |
+| 🟢 `simple` | `claude-haiku-5-5` | Typos, renames, formatting, docs, version bumps, quick lookups |
+| 🟡 `everyday` | `claude-sonnet-5-5` | Features, clear bug fixes, tests, refactors with a clear spec |
+| 🔴 `hard` | `claude-opus-5-5` | Architecture, race conditions, memory leaks, root-cause debugging, security reviews |
 
 The tier is picked in this order:
 
 1. **Override prefix.** `!haiku`, `!sonnet` or `!opus` at the start of a prompt forces that model for that one prompt. The prefix is stripped before the agent sees it.
 2. **Keyword fast path.** No model call. Words like "architecture", "race condition", "root cause" or "security review" mean `hard`. Short prompts (120 characters or less) with words like "typo", "rename", "readme" or "bump" mean `simple`. Short acknowledgements ("ok", "yes", "go ahead", "continue") keep the current tier.
-3. **Classifier.** Anything else is labelled by a small model call (see [Classifier](#classifier)).
+3. **Classifier.** Anything else is labelled by a small model call (see [Classifier](#-classifier)).
 
-### Stickiness
+### 🧲 Stickiness
 
 Switching the main model throws away the prompt cache, which costs tokens. So gearshift is sticky:
 
 - It moves **up** a tier immediately when a prompt needs it.
 - It moves **down** only after two prompts in a row suggest a lower tier.
 
-### Subagents
+### 🤖 Subagents
 
 When the agent spawns a subagent without choosing a model, gearshift classifies the subagent's prompt and picks the model. If the caller already chose a model, gearshift leaves it alone.
 
-## How triage works
+## 🚦 How triage works
 
 When you send a prompt while a task is running, gearshift picks one of three paths:
 
 | Decision | When | What happens |
 | --- | --- | --- |
-| **interrupt** | The prompt cancels, contradicts or redirects the task ("stop", "wait, use pnpm", "wrong file") | The running turn is aborted, then the agent gets your new prompt along with what it was doing, so it can keep useful progress |
-| **steer** | A small tweak to the current task | The prompt goes into the running turn (Claude Code's normal behavior) |
-| **queue** | A separate task for later | The prompt is held and sent when the current task finishes. Several queued prompts are sent together as one numbered list |
+| 🛑 **interrupt** | The prompt cancels, contradicts or redirects the task ("stop", "wait, use pnpm", "wrong file") | The running turn is aborted, then the agent gets your new prompt along with what it was doing, so it can keep useful progress |
+| 🧭 **steer** | A small tweak to the current task | The prompt goes into the running turn (Claude Code's normal behavior) |
+| 📥 **queue** | A separate task for later | The prompt is held and sent when the current task finishes. Several queued prompts are sent together as one numbered list |
 
 Prompts starting with "stop", "wait", "cancel", "hold on", "never mind", "no", "wrong", "actually" or "instead" interrupt immediately with no model call. Others go to the classifier. If the classifier can't decide, the prompt is queued (configurable with `triage_unsure`).
 
 gearshift never interrupts when you explicitly queue a prompt with `ctrl+x enter`.
 
-## Commands
+## 💬 Commands
 
 | Command | What it does |
 | --- | --- |
@@ -106,7 +146,7 @@ gearshift never interrupts when you explicitly queue a prompt with `ctrl+x enter
 
 `/gearshift` runs immediately, even while a task is running.
 
-## Configuration
+## 🔧 Configuration
 
 Set these in the plugin's settings after install (in the CLI, through `/plugin`; in the desktop app, from the plugin's entry under **Plugins**).
 
@@ -120,7 +160,7 @@ Set these in the plugin's settings after install (in the CLI, through `/plugin`;
 | `triage_enabled` | `true` | Triage prompts sent while a task runs. `false` keeps Claude Code's default (steer) |
 | `triage_unsure` | `queue` | What to do when triage can't decide: `queue` or `steer` |
 
-## Classifier
+## 🧠 Classifier
 
 When the keyword fast path doesn't match, gearshift asks a model to label the prompt. It tries, in order:
 
@@ -130,11 +170,11 @@ When the keyword fast path doesn't match, gearshift asks a model to label the pr
 
 Each attempt has a timeout (3 seconds for direct calls, 12 seconds for the subagent). A classifier that errors is skipped for 5 minutes. If none answers, gearshift keeps the current tier (routing) or uses `triage_unsure` (triage).
 
-## Fallbacks
+## 🛟 Fallbacks
 
 If a routed model fails (for example, your plan doesn't include it), gearshift retries the step on your session model, shows a toast, and avoids that model for 5 minutes. Your work is never blocked by routing.
 
-## Token usage
+## 📊 Token usage
 
 gearshift aims to spend less overall by running simple work on cheaper models. It also adds some overhead of its own:
 
@@ -142,7 +182,7 @@ gearshift aims to spend less overall by running simple work on cheaper models. I
 - **Prompt cache.** Each switch of the main model starts a fresh prompt cache. Stickiness keeps switches rare.
 - **Interrupts.** An interrupt resubmits a short summary of the old task (up to 500 characters) with your new prompt.
 
-### Measured results
+### 📈 Measured results
 
 > Results pending. Numbers below will be filled in from real sessions.
 
@@ -158,20 +198,20 @@ Test setup: _TBD (Claude Code version, task mix, number of sessions)_
 
 Tier mix across the test prompts: _TBD (% simple / everyday / hard)_
 
-## Privacy
+## 🔒 Privacy
 
 gearshift runs locally inside Claude Code. Classification uses the same Claude session and account you're already using. Nothing is sent to any other service, and gearshift stores no data outside the session.
 
-## Troubleshooting
+## 🩺 Troubleshooting
 
 - **Hint never shows a model.** Run `/gearshift`. If mode is `off`, run `/gearshift auto`. If the tier is `none`, send a prompt first.
 - **Classifier shows errors.** Run `/gearshift` to see which classifier failed and why. Set `classifier_model` to a model your plan includes, or run `/gearshift probe` to check subagent spawning.
 - **Too many interrupts.** Set `triage_unsure` to `steer`, or set `triage_enabled` to `false`.
 - **Want one prompt on a specific model.** Start it with `!haiku`, `!sonnet` or `!opus`.
 
-## Development
+## 🧪 Development
 
-```
+```bash
 git clone https://github.com/joezhuo2/gearshift
 cd gearshift
 claude plugin validate .
@@ -180,6 +220,6 @@ claude plugin test .
 
 Source lives in `hooks/`: `route.ts` (tiers, keywords, stickiness), `triage.ts` (interrupt/steer/queue) and `register.tsx` (the mod wiring). Tests sit next to each file.
 
-## License
+## 📄 License
 
 [MIT](LICENSE)
