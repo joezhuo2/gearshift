@@ -9,6 +9,6 @@ export type Snapshot = {
 
 declare module 'claude-code' {
   interface PluginState {
-    gearshift: { snapshot: Snapshot }
+    gearshift: { snapshot: Snapshot; band: boolean }
   }
 }

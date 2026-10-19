@@ -9,7 +9,9 @@ import { decisionFromLabel, fastTriage, flushPrompt, steerPrompt, TRIAGE_LABELS,
 import type { Decision } from './triage'
 
 const CLASSIFY_TIMEOUT_MS = 3000
-const PANE = 'gearshift'
+const BLOCK_MS = 5 * 60 * 1000
+
+const band = atom({ plugin: 'gearshift', key: 'band' } as const, false)
 
 const view = atom({ plugin: 'gearshift', key: 'snapshot' } as const, {
   mode: 'auto',
@@ -33,6 +35,7 @@ type State = {
   steer?: string
   classifier: string
   classifierModel?: string
+  blockedUntil: Record<string, number>
 }
 
 async function pick($: EngineInterface, s: State, text: string, labels: readonly string[], model?: string): Promise<string | undefined> {
@@ -63,8 +66,12 @@ async function classify($: EngineInterface, s: State, text: string): Promise<Tie
     return fast
   }
   const tier = tierFromLabel(await pick($, s, text, LABELS, s.classifierModel))
-  s.lastReason = tier ? 'haiku classifier' : 'classifier gave no answer, kept tier'
-  return tier ?? s.sticky.current
+  if (tier) {
+    s.lastReason = 'classifier'
+    return tier
+  }
+  s.lastReason = s.sticky.current ? 'classifier unavailable, kept tier' : 'classifier unavailable, defaulted to everyday'
+  return s.sticky.current ?? 'everyday'
 }
 
 async function interrupt($: EngineInterface, s: State, message: string) {
@@ -98,7 +105,9 @@ export const register: Register = (on, options) => {
     queue: [],
     classifier: 'not called yet',
     classifierModel: String(options.classifier_model ?? '') || undefined,
+    blockedUntil: {},
   }
+  const usable = (model: string) => model !== '' && (s.blockedUntil[model] ?? 0) < Date.now()
   const snap = (): Snapshot => {
     const tier = s.oneShot ?? (s.mode === 'auto' ? s.sticky.current : s.mode === 'off' ? undefined : s.mode)
     return {
@@ -124,8 +133,8 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'gearshift' }, async ($, e) => {
     const arg = (e.args ?? '').trim().toLowerCase()
     if (arg === 'panel') {
-      await $.ui.open({ id: PANE, title: 'gearshift' })
-      return { text: 'gearshift: panel opened.' }
+      const shown = await update($, band, open => !open)
+      return { text: `gearshift: panel ${shown ? 'shown above the prompt' : 'hidden'}.` }
     }
     if (arg === 'now') {
       const last = s.queue.pop()
@@ -208,15 +217,23 @@ export const register: Register = (on, options) => {
     const tier = s.oneShot ?? (s.mode === 'auto' ? s.sticky.current : s.mode)
     const model = tier ? modelFor(tier) : ''
     if (e.index === 0) await publish($, snap())
-    if (!tier || !model) return yield* next(e)
+    if (!tier || !usable(model) || model === e.model) return yield* next(e)
     $.ui.status(`⚙ ${tier} · ${model.replace(/^claude-/, '')}`)
-    return yield* next({ ...e, model })
+    try {
+      return yield* next({ ...e, model })
+    } catch (err) {
+      s.blockedUntil[model] = Date.now() + BLOCK_MS
+      s.lastReason = `${model} failed (${String(err).slice(0, 80)}), used the session model for 5 min`
+      $.ui.toast(`gearshift: ${model} unavailable, using the session model`)
+      await publish($, snap())
+      return yield* next(e)
+    }
   })
 
   on('agent.spawn', async ($, e, next) => {
     if (s.mode === 'off' || e.model !== undefined) return next(e)
     const tier = s.mode === 'auto' ? await classify($, s, e.prompt) : s.mode
-    return tier ? next({ ...e, model: modelFor(tier) }) : next(e)
+    return tier && usable(modelFor(tier)) ? next({ ...e, model: modelFor(tier) }) : next(e)
   })
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
@@ -227,21 +244,26 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     const v = await read($, view)
-    if (v.mode === 'off' || !v.tier) return next(e)
-    const tag = `⚙ ${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}${v.queued ? ` · ${v.queued} queued` : ''}`
+    if (v.mode === 'off') return next(e)
+    const routed = v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'session model'
+    const tag = `⚙ ${routed}${v.queued ? ` · ${v.queued} queued` : ''}`
     return next({ ...e, props: { ...e.props, hint: e.props.hint ? `${tag} · ${e.props.hint}` : tag } })
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey || !(await read($, band))) return next(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const v = await read($, view)
+    const routed = v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'session model'
     return (
       <Box flexDirection="column">
-        <Text bold>{v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'no tier yet (session model)'}</Text>
-        <Text dimColor>mode: {v.mode}</Text>
+        <Box>
+          <Text bold>gearshift: {routed} </Text>
+          <Text dimColor>(mode {v.mode}, {String(v.queued)} queued) </Text>
+          <Button key="hide" label="Hide" onPress={() => update($, band, () => false)} />
+        </Box>
         <Text dimColor>why: {v.reason}</Text>
         <Text dimColor>classifier: {v.classifier}</Text>
-        <Text dimColor>queued: {String(v.queued)}</Text>
       </Box>
     )
   })
