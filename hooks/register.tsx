@@ -1,4 +1,7 @@
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
+
+import type { Snapshot } from '../types'
 
 import { applySticky, fastTier, LABELS, parseOverride, tierFromLabel, TIERS } from './route'
 import type { Sticky, Tier } from './route'
@@ -6,6 +9,16 @@ import { decisionFromLabel, fastTriage, flushPrompt, steerPrompt, TRIAGE_LABELS,
 import type { Decision } from './triage'
 
 const CLASSIFY_TIMEOUT_MS = 3000
+const PANE = 'gearshift'
+
+const view = atom({ plugin: 'gearshift', key: 'snapshot' } as const, {
+  mode: 'auto',
+  tier: null,
+  model: null,
+  reason: 'no prompt yet',
+  classifier: 'not called yet',
+  queued: 0,
+} as Snapshot)
 
 type Mode = 'auto' | 'off' | Tier
 
@@ -71,6 +84,10 @@ async function flush($: EngineInterface, s: State) {
   await $.prompt.submit({ text, asUser: true })
 }
 
+async function publish($: EngineInterface, snapshot: Snapshot) {
+  await update($, view, () => snapshot)
+}
+
 export const register: Register = (on, options) => {
   const modelFor = (tier: Tier) => String(options[`model_${tier}`] ?? '')
   const unsure: Decision = options.triage_unsure === 'steer' ? 'steer' : 'queue'
@@ -82,18 +99,35 @@ export const register: Register = (on, options) => {
     classifier: 'not called yet',
     classifierModel: String(options.classifier_model ?? '') || undefined,
   }
+  const snap = (): Snapshot => {
+    const tier = s.oneShot ?? (s.mode === 'auto' ? s.sticky.current : s.mode === 'off' ? undefined : s.mode)
+    return {
+      mode: s.mode,
+      tier: tier ?? null,
+      model: tier ? modelFor(tier) : null,
+      reason: s.lastReason,
+      classifier: s.classifier,
+      queued: s.queue.length,
+    }
+  }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'gearshift',
-      description: 'Model routing and triage: /gearshift [auto|off|simple|everyday|hard|now|drop]',
+      description: 'Model routing and triage: /gearshift [auto|off|simple|everyday|hard|now|drop|panel]',
       immediate: true,
     })
+    void $.ui.open({ id: PANE, title: 'gearshift' })
+    await publish($, snap())
     return next(e)
   })
 
   on('command.run', { command: 'gearshift' }, async ($, e) => {
     const arg = (e.args ?? '').trim().toLowerCase()
+    if (arg === 'panel') {
+      await $.ui.open({ id: PANE, title: 'gearshift' })
+      return { text: 'gearshift: panel opened.' }
+    }
     if (arg === 'now') {
       const last = s.queue.pop()
       if (!last) return { text: 'gearshift: nothing queued.' }
@@ -107,8 +141,9 @@ export const register: Register = (on, options) => {
       return { text: `gearshift: dropped ${n} queued prompt${n === 1 ? '' : 's'}.` }
     }
     if (arg === 'auto' || arg === 'off' || (TIERS as readonly string[]).includes(arg)) s.mode = arg as Mode
-    else if (arg) return { text: `gearshift: unknown "${arg}". Use auto, off, simple, everyday, hard, now or drop.` }
+    else if (arg) return { text: `gearshift: unknown "${arg}". Use auto, off, simple, everyday, hard, now, drop or panel.` }
     if (s.mode === 'off') $.ui.status(undefined)
+    await publish($, snap())
     const tier = s.sticky.current
     return {
       text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}. Classifier: ${s.classifier}. Queued: ${s.queue.length}.`,
@@ -125,6 +160,7 @@ export const register: Register = (on, options) => {
     if (e.agentId === undefined && s.running?.turnId === e.turnId) {
       s.running = undefined
       await flush($, s)
+      await publish($, snap())
     }
     return done
   })
@@ -146,6 +182,7 @@ export const register: Register = (on, options) => {
         return { drop: 'gearshift: interrupted and resubmitted' }
       }
       s.queue.push(e.text)
+      await publish($, snap())
       $.ui.toast(`gearshift: queued (${s.queue.length}) until this task finishes. /gearshift now to send it now`)
       return { drop: 'gearshift: queued until the current task finishes' }
     }
@@ -171,6 +208,7 @@ export const register: Register = (on, options) => {
     }
     const tier = s.oneShot ?? (s.mode === 'auto' ? s.sticky.current : s.mode)
     const model = tier ? modelFor(tier) : ''
+    if (e.index === 0) await publish($, snap())
     if (!tier || !model) return yield* next(e)
     $.ui.status(`⚙ ${tier} · ${model.replace(/^claude-/, '')}`)
     return yield* next({ ...e, model })
@@ -180,5 +218,25 @@ export const register: Register = (on, options) => {
     if (s.mode === 'off' || e.model !== undefined) return next(e)
     const tier = s.mode === 'auto' ? await classify($, s, e.prompt) : s.mode
     return tier ? next({ ...e, model: modelFor(tier) }) : next(e)
+  })
+
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    const v = await read($, view)
+    if (v.mode === 'off' || !v.tier) return next(e)
+    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, `gearshift: ${v.tier}`] } })
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    const v = await read($, view)
+    return (
+      <Box flexDirection="column">
+        <Text bold>{v.tier ? `${v.tier} · ${(v.model ?? '').replace(/^claude-/, '')}` : 'no tier yet (session model)'}</Text>
+        <Text dimColor>mode: {v.mode}</Text>
+        <Text dimColor>why: {v.reason}</Text>
+        <Text dimColor>classifier: {v.classifier}</Text>
+        <Text dimColor>queued: {String(v.queued)}</Text>
+      </Box>
+    )
   })
 }

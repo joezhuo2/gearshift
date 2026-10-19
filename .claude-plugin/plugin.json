@@ -6,6 +6,7 @@
   "homepage": "https://github.com/joezhuo2/gearshift",
   "repository": "https://github.com/joezhuo2/gearshift",
   "license": "MIT",
+  "types": "./types/index.d.ts",
   "keywords": ["routing", "model", "haiku", "sonnet", "opus", "cost"],
   "userConfig": {
     "enabled": {
