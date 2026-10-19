@@ -47,8 +47,9 @@ test('sticky: a higher vote resets the downgrade count', () => {
   expect(s.current).toBe('hard')
 })
 
-function engine(on: On, label: string, seen: string[], fail: { classify?: boolean; model?: string } = {}) {
+function engine(on: On, label: string, seen: string[], fail: { classify?: boolean; model?: string; calls?: { n: number } } = {}) {
   on('model.classify', () => {
+    if (fail.calls) fail.calls.n += 1
     if (fail.classify) throw new Error('HTTP 429 rate_limit')
     return { value: label }
   })
@@ -118,4 +119,17 @@ test('a failing routed model falls back to the session model', async ($, on) => 
   await submit($, 'in one word, what is the capital of Spain?')
   await step($, 't2')
   expect(seen).toEqual(['engine-default', 'engine-default'])
+})
+
+test('a rate-limited classifier is paused instead of called every prompt', async ($, on) => {
+  const seen: string[] = []
+  const calls = { n: 0 }
+  engine(on, LABELS[0], seen, { classify: true, calls })
+  await submit($, 'add a dark mode toggle to the settings page')
+  await step($, 't1')
+  const first = calls.n
+  await submit($, 'add a light mode toggle to the settings page')
+  await step($, 't2')
+  expect(first).toBe(2)
+  expect(calls.n).toBe(first)
 })
