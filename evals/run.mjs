@@ -1,29 +1,22 @@
-// Classifier accuracy eval. Needs ANTHROPIC_API_KEY.
-// Usage: node evals/run.mjs [model]   (default claude-haiku-5-5)
+// Classifier accuracy eval. Uses the local Claude Code CLI (claude -p), so no API key is needed.
+// Usage: node evals/run.mjs [model]   (default haiku)
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 
 const LABELS = {
   simple: 'simple-edit-docs-or-lookup',
   everyday: 'everyday-feature-fix-or-tests',
   hard: 'hard-design-subtle-bug-or-security',
 }
-const key = process.env.ANTHROPIC_API_KEY
-if (!key) throw new Error('ANTHROPIC_API_KEY is not set')
-const model = process.argv[2] ?? 'claude-haiku-5-5'
+const model = process.argv[2] ?? 'haiku'
 const cases = JSON.parse(readFileSync(new URL('./prompts.json', import.meta.url), 'utf8'))
 const labels = Object.values(LABELS)
 
-async function classify(text) {
+function classify(text) {
   const prompt = ['Classify the text below. Reply with exactly one of these labels and nothing else:', ...labels, '', 'Text:', text].join('\n')
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model, max_tokens: 40, messages: [{ role: 'user', content: prompt }] }),
-  })
-  if (!res.ok) throw new Error(`API ${res.status}: ${(await res.text()).slice(0, 200)}`)
-  const data = await res.json()
-  const answer = data.content?.find(b => b.type === 'text')?.text ?? ''
+  const r = spawnSync('claude', ['-p', prompt, '--model', model], { encoding: 'utf8', shell: process.platform === 'win32' })
+  if (r.error || r.status !== 0) throw new Error(`claude -p failed: ${(r.error?.message ?? r.stderr ?? '').slice(0, 200)}`)
+  const answer = r.stdout.trim()
   const tier = Object.keys(LABELS).find(t => answer.includes(LABELS[t]))
   return { tier, answer }
 }
@@ -32,10 +25,9 @@ const counts = { simple: [0, 0], everyday: [0, 0], hard: [0, 0] }
 let correct = 0
 const misses = []
 for (const c of cases) {
-  const { tier, answer } = await classify(c.text)
-  const ok = tier === c.tier
+  const { tier, answer } = classify(c.text)
   counts[c.tier][1]++
-  if (ok) { correct++; counts[c.tier][0]++ } else misses.push({ text: c.text, want: c.tier, got: tier ?? `no label: ${answer.slice(0, 60)}` })
+  if (tier === c.tier) { correct++; counts[c.tier][0]++ } else misses.push({ text: c.text, want: c.tier, got: tier ?? `no label: ${answer.slice(0, 60)}` })
 }
 
 console.log(`model ${model}: ${correct}/${cases.length} correct (${((100 * correct) / cases.length).toFixed(1)}%)`)
