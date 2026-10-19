@@ -2,6 +2,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { applySticky, fastTier, LABELS, parseOverride, tierFromLabel, TIERS } from './route'
 import type { Sticky, Tier } from './route'
+import { decisionFromLabel, fastTriage, flushPrompt, steerPrompt, TRIAGE_LABELS, triageInput } from './triage'
+import type { Decision } from './triage'
 
 const CLASSIFY_TIMEOUT_MS = 3000
 
@@ -13,6 +15,17 @@ type State = {
   pending?: Promise<Tier | undefined>
   oneShot?: Tier
   lastReason: string
+  running?: { turnId: string; text: string }
+  queue: string[]
+  steer?: string
+}
+
+async function pick($: EngineInterface, text: string, labels: readonly string[]): Promise<string | undefined> {
+  const timeout = $.clock.sleep(CLASSIFY_TIMEOUT_MS).then(
+    () => undefined,
+    () => new Promise<undefined>(() => {}),
+  )
+  return Promise.race([$.model.classify(text, labels, { model: 'haiku' }).catch(() => undefined), timeout])
 }
 
 async function classify($: EngineInterface, s: State, text: string): Promise<Tier | undefined> {
@@ -25,41 +38,106 @@ async function classify($: EngineInterface, s: State, text: string): Promise<Tie
     s.lastReason = 'keyword match'
     return fast
   }
-  const timeout = $.clock.sleep(CLASSIFY_TIMEOUT_MS).then(
-    () => undefined,
-    () => new Promise<undefined>(() => {}),
-  )
-  const label = await Promise.race([$.model.classify(text, LABELS, { model: 'haiku' }).catch(() => undefined), timeout])
-  const tier = tierFromLabel(label)
+  const tier = tierFromLabel(await pick($, text, LABELS))
   s.lastReason = tier ? 'haiku classifier' : 'classifier gave no answer, kept tier'
   return tier ?? s.sticky.current
 }
 
+async function interrupt($: EngineInterface, s: State, message: string) {
+  const running = s.running
+  if (!running) return
+  s.steer = steerPrompt(running.text, message)
+  await $.turn.abort({ turnId: running.turnId })
+}
+
+async function flush($: EngineInterface, s: State) {
+  const steer = s.steer
+  s.steer = undefined
+  if (steer) await $.prompt.submit({ text: steer, asUser: true })
+  if (s.queue.length === 0) return
+  const text = flushPrompt(s.queue)
+  s.queue = []
+  await $.prompt.submit({ text, asUser: true })
+}
+
 export const register: Register = (on, options) => {
   const modelFor = (tier: Tier) => String(options[`model_${tier}`] ?? '')
-  const s: State = { mode: options.enabled === false ? 'off' : 'auto', sticky: { lowerVotes: 0 }, lastReason: 'no prompt yet' }
+  const unsure: Decision = options.triage_unsure === 'steer' ? 'steer' : 'queue'
+  const s: State = {
+    mode: options.enabled === false ? 'off' : 'auto',
+    sticky: { lowerVotes: 0 },
+    lastReason: 'no prompt yet',
+    queue: [],
+  }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'gearshift',
-      description: 'Show or set model routing: /gearshift [auto|off|simple|everyday|hard]',
+      description: 'Model routing and triage: /gearshift [auto|off|simple|everyday|hard|now|drop]',
+      immediate: true,
     })
     return next(e)
   })
 
   on('command.run', { command: 'gearshift' }, async ($, e) => {
     const arg = (e.args ?? '').trim().toLowerCase()
+    if (arg === 'now') {
+      const last = s.queue.pop()
+      if (!last) return { text: 'gearshift: nothing queued.' }
+      if (s.running) await interrupt($, s, last)
+      else await $.prompt.submit({ text: last, asUser: true })
+      return { text: 'gearshift: sent the last queued prompt now.' }
+    }
+    if (arg === 'drop') {
+      const n = s.queue.length
+      s.queue = []
+      return { text: `gearshift: dropped ${n} queued prompt${n === 1 ? '' : 's'}.` }
+    }
     if (arg === 'auto' || arg === 'off' || (TIERS as readonly string[]).includes(arg)) s.mode = arg as Mode
-    else if (arg) return { text: `gearshift: unknown "${arg}". Use auto, off, simple, everyday or hard.` }
+    else if (arg) return { text: `gearshift: unknown "${arg}". Use auto, off, simple, everyday, hard, now or drop.` }
     if (s.mode === 'off') $.ui.status(undefined)
     const tier = s.sticky.current
     return {
-      text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}.`,
+      text: `gearshift mode: ${s.mode}. Current tier: ${tier ?? 'none'}${tier ? ` (${modelFor(tier)})` : ''}. Last decision: ${s.lastReason}. Queued: ${s.queue.length}.`,
     }
   })
 
+  on('turn.start', async ($, e, next) => {
+    if (e.agentId === undefined) s.running = { turnId: e.turnId, text: e.text || s.running?.text || '' }
+    return next(e)
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    const done = await next(e)
+    if (e.agentId === undefined && s.running?.turnId === e.turnId) {
+      s.running = undefined
+      await flush($, s)
+    }
+    return done
+  })
+
   on('prompt.submit', async ($, e, next) => {
-    if (s.mode === 'off' || e.turnId !== undefined || e.command || e.isMeta) return next(e)
+    if (e.command || e.isMeta) return next(e)
+
+    if (e.turnId !== undefined) {
+      if (options.triage_enabled === false || e.wait || e.origin.kind !== 'composer' || !s.running) return next(e)
+      const decision =
+        fastTriage(e.text) ?? decisionFromLabel(await pick($, triageInput(s.running.text, e.text), TRIAGE_LABELS)) ?? unsure
+      if (decision === 'steer') {
+        $.ui.toast('gearshift: steering the current task')
+        return next(e)
+      }
+      if (decision === 'interrupt') {
+        $.ui.toast('gearshift: interrupting to change direction')
+        await interrupt($, s, e.text)
+        return { drop: 'gearshift: interrupted and resubmitted' }
+      }
+      s.queue.push(e.text)
+      $.ui.toast(`gearshift: queued (${s.queue.length}) until this task finishes. /gearshift now to send it now`)
+      return { drop: 'gearshift: queued until the current task finishes' }
+    }
+
+    if (s.mode === 'off') return next(e)
     const { tier, text } = parseOverride(e.text)
     if (tier) {
       s.oneShot = tier
