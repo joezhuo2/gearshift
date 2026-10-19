@@ -1,5 +1,9 @@
-<h1 align="center">⚙️ gearshift</h1>
+<h1 align="center">gearshift</h1>
 
+<p align="center">
+  <em>Cheaper where it can be, smarter where it counts.</em>
+</p>
+  
 <p align="center">
   <a href="#-requirements">📋 Requirements</a> •
   <a href="#-install">🚀 Install</a> •
@@ -17,10 +21,7 @@
 </p>
 
 <p align="center">
-  gearshift runs two jobs in the background, so you never pick a model or babysit a queue.<br>
-  <b>🧭 Routing</b> sends each prompt to the model that fits it: Haiku for simple work, Sonnet for everyday work, Opus for hard work, subagents included.<br>
-  <b>🚦 Triage</b> decides whether a prompt typed mid-run should interrupt, steer, or queue behind the current task.<br>
-  Cheaper where it can be, smarter where it counts.
+  gearshift runs two jobs in the background, so you never pick a model or babysit a queue. Routing sends each prompt to the model that fits it: Haiku for simple work, Sonnet for everyday work, Opus for hard work, subagents included. Triage decides whether a prompt typed mid-run should interrupt, steer, or queue behind the current task.
 </p>
 
 ## 📋 Requirements
