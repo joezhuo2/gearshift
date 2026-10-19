@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Snapshot } from '../types'
 
-import { applySticky, fastTier, heuristicTier, LABELS, parseOverride, tierFromLabel, TIERS } from './route'
+import { applySticky, fastTier, LABELS, parseOverride, tierFromLabel, TIERS } from './route'
 import type { Sticky, Tier } from './route'
 import { decisionFromLabel, fastTriage, flushPrompt, steerPrompt, TRIAGE_LABELS, triageInput } from './triage'
 import type { Decision } from './triage'
@@ -113,8 +113,8 @@ async function classify($: EngineInterface, s: State, text: string): Promise<Tie
     s.lastReason = 'classifier'
     return tier
   }
-  s.lastReason = 'no model available to classify, used keyword rules'
-  return heuristicTier(text)
+  s.lastReason = 'no model available to classify, kept the session model'
+  return s.sticky.current
 }
 
 async function interrupt($: EngineInterface, s: State, message: string) {
