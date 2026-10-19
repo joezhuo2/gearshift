@@ -44,13 +44,3 @@ export function applySticky(s: Sticky, suggested: Tier): Sticky {
   const votes = s.lowerVotes + 1
   return votes >= 2 ? { current: suggested, lowerVotes: 0 } : { current: s.current, lowerVotes: votes }
 }
-
-const CODE_HINT = /[`/\\]|\.\w{1,4}\b|\b(fix|bug|error|fail\w*|implement|refactor|test|build|deploy|function|class|api|database|query|migrate|debug|review|install|config\w*)\b/i
-
-export function heuristicTier(text: string): Tier {
-  const t = text.trim()
-  const fast = fastTier(t)
-  if (fast === 'hard' || fast === 'simple') return fast
-  if (t.length <= 120 && !CODE_HINT.test(t)) return 'simple'
-  return 'everyday'
-}

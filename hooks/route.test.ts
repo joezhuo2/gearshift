@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { applySticky, fastTier, heuristicTier, LABELS, parseOverride, tierFromLabel } from './route'
+import { applySticky, fastTier, LABELS, parseOverride, tierFromLabel } from './route'
 
 test('fast path catches obvious tiers and follow-ups', () => {
   expect(fastTier('fix the typo in README')).toBe('simple')
@@ -103,19 +103,12 @@ test('/gearshift off passes the engine model through', async ($, on) => {
   expect(seen).toEqual(['engine-default'])
 })
 
-test('keyword rules sort prompts when no model can classify', () => {
-  expect(heuristicTier('in one line, suggest a name for a cat')).toBe('simple')
-  expect(heuristicTier('add a dark mode toggle to src/settings.tsx')).toBe('everyday')
-  expect(heuristicTier('find the race condition in the job queue')).toBe('hard')
-  expect(heuristicTier(`please look into why ${'x '.repeat(80)}`)).toBe('everyday')
-})
-
-test('a classifier failure falls back to keyword rules', async ($, on) => {
+test('a classifier failure keeps the session model', async ($, on) => {
   const seen: string[] = []
   engine(on, LABELS[0], seen, { classify: true })
   await submit($, 'in one line, suggest a name for a cat')
   await step($, 't1')
-  expect(seen).toEqual(['claude-haiku-5-5'])
+  expect(seen).toEqual(['engine-default'])
 })
 
 test('a failing routed model falls back to the session model', async ($, on) => {
