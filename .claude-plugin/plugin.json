@@ -32,6 +32,12 @@
       "description": "Architecture, subtle bugs, security",
       "default": "claude-opus-5-5"
     },
+    "classifier_model": {
+      "type": "string",
+      "title": "Classifier model",
+      "description": "Model that labels prompts; empty uses Claude Code's own small fast model",
+      "default": ""
+    },
     "triage_enabled": {
       "type": "boolean",
       "title": "Triage prompts sent mid-run",
