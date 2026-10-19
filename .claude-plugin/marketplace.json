@@ -1,5 +1,11 @@
 {
   "name": "gearshift",
   "owner": { "name": "joezhuo2" },
-  "plugins": [{ "name": "gearshift", "source": "./" }]
+  "plugins": [
+    {
+      "name": "gearshift",
+      "source": "./",
+      "description": "Routes each prompt to Haiku, Sonnet or Opus by difficulty, and triages prompts sent while the agent is busy"
+    }
+  ]
 }
