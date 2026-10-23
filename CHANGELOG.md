@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Fix `npx` install: the npm name `gearshift` belongs to an unrelated package, so install with `npx github:joezhuo2/gearshift`.
+
 ## 0.1.1
 
 - `/gearshift` reports the hint line draws.
