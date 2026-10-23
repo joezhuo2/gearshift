@@ -243,18 +243,17 @@ export const register: Register = (on, options) => {
       const decision =
         fastTriage(e.text) ?? decisionFromLabel(await pick($, s, triageInput(s.running.text, e.text), TRIAGE_LABELS)) ?? unsure
       if (decision === 'steer') {
-        $.ui.toast('gearshift: steering the current task')
+        $.ui.toast('gearshift · Added to the current task')
         return next(e)
       }
       if (decision === 'interrupt') {
-        $.ui.toast('gearshift: interrupting to change direction')
         await interrupt($, s, e.text)
-        return { drop: 'gearshift: interrupted and resubmitted' }
+        return { drop: 'gearshift · Redirecting. The current task was stopped and will restart with your update.' }
       }
       s.queue.push(e.text)
       await publish($, snap())
-      $.ui.toast(`gearshift: queued (${s.queue.length}) until this task finishes. /gearshift now to send it now`)
-      return { drop: 'gearshift: queued until the current task finishes' }
+      const n = s.queue.length
+      return { drop: `gearshift · Queued${n > 1 ? ` (${n} waiting)` : ''}. Sends when the current task finishes; /gearshift now sends it immediately.` }
     }
 
     if (s.mode === 'off') return next(e)

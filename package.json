@@ -1,6 +1,6 @@
 {
   "name": "gearshift",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Routes each prompt to Haiku, Sonnet or Opus by difficulty, and triages prompts sent while the agent is busy",
   "bin": { "gearshift": "bin/gearshift.js" },
   "files": ["bin", ".claude-plugin", "hooks", "types", "README.md", "LICENSE"],

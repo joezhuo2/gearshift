@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Clearer notice when triage queues or redirects a prompt sent mid-run, with no duplicate toast.
+
 ## 0.1.3
 
 - The `gearshift:` label beside the model picker now shows from the start (`gearshift: auto`), not only after a tier was picked.
