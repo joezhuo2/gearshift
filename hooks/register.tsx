@@ -300,8 +300,8 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const v = await read($, view)
-    if (v.mode === 'off' || !v.tier) return next(e)
-    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, `gearshift: ${v.tier}`] } })
+    if (v.mode === 'off') return next(e)
+    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, `gearshift: ${v.tier ?? v.mode}`] } })
   })
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {

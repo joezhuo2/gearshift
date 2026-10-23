@@ -87,7 +87,7 @@ Run `/gearshift`. You should see a line like:
 gearshift mode: auto. Current tier: none. Last decision: no prompt yet. ...
 ```
 
-After your next prompt, the prompt hint shows the routed model, for example `⚙ everyday · sonnet-5-5`.
+The footer beside the model picker shows `gearshift: auto` right away, and the tier (for example `gearshift: everyday`) once a prompt has been routed. In the terminal the prompt hint also shows the routed model, for example `⚙ everyday · sonnet-5-5`.
 
 ### 🔄 Update
 
