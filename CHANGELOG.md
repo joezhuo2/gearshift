@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- The `gearshift:` label beside the model picker now shows from the start (`gearshift: auto`), not only after a tier was picked.
+
 ## 0.1.2
 
 - Fix `npx` install: the npm name `gearshift` belongs to an unrelated package, so install with `npx github:joezhuo2/gearshift`.
