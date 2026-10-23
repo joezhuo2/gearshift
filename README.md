@@ -45,19 +45,21 @@ No API key or build step is needed. gearshift uses your existing Claude Code ses
 ### ⚡ npx (one command)
 
 ```bash
-npx gearshift
+npx github:joezhuo2/gearshift
 ```
+
+The `gearshift` name on npm belongs to an unrelated package, so install from GitHub as shown; a bare `npx gearshift` fails with "could not determine executable to run".
 
 This runs `claude plugin marketplace add joezhuo2/gearshift` and `claude plugin install gearshift@gearshift` for you. Restart Claude Code (or start a new session) so the mod loads.
 
 Prefer a global install?
 
 ```bash
-npm install -g gearshift
+npm install -g github:joezhuo2/gearshift
 gearshift install
 ```
 
-`gearshift update` and `gearshift uninstall` work the same way (`npx gearshift update`, `npx gearshift uninstall`).
+`gearshift update` and `gearshift uninstall` work the same way (`npx github:joezhuo2/gearshift update`, `npx github:joezhuo2/gearshift uninstall`).
 
 ### 🖥️ Claude Code CLI (manual)
 
@@ -90,7 +92,7 @@ After your next prompt, the prompt hint shows the routed model, for example `⚙
 ### 🔄 Update
 
 ```bash
-npx gearshift update
+npx github:joezhuo2/gearshift update
 ```
 
 This refreshes the marketplace and updates the plugin to the latest release. Restart Claude Code (or start a new session) so the new version loads.
@@ -107,7 +109,7 @@ To see the newest version, check the [latest release](https://github.com/joezhuo
 ### 🗑️ Uninstall
 
 ```bash
-npx gearshift uninstall
+npx github:joezhuo2/gearshift uninstall
 ```
 
 Or, inside Claude Code:

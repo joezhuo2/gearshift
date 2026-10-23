@@ -18,7 +18,7 @@ const steps = {
 }[cmd];
 
 if (!steps) {
-  console.error("Usage: npx gearshift [install|update|uninstall]");
+  console.error("Usage: npx github:joezhuo2/gearshift [install|update|uninstall]");
   process.exit(1);
 }
 
